@@ -1,227 +1,127 @@
-# BiblioFlix — Biblioteca Digital
+# BiblioFlix — Frontend
 
-Sistema de biblioteca com catálogo de livros, empréstimos com QR Code e painel
-administrativo. Agora com **banco de dados PostgreSQL** de verdade, **login com
-senha** e **cadastro/baixa de livros** pelos administradores.
+Interface web da biblioteca digital BiblioFlix: catálogo de livros, empréstimos
+com QR Code, leitura de código de barras pela câmera e painel administrativo.
 
-O banco vem **vazio** — você cria o primeiro admin com um comando e adiciona os
-livros e usuários pelo próprio site.
+A aplicação é um cliente Next.js que consome exclusivamente o
+[API Gateway](../biblioflix-backend) do backend. Toda a persistência,
+autenticação e regra de negócio ficam nos microsserviços; o frontend apenas
+apresenta os dados e envia as ações do usuário ao gateway.
 
----
+## Sumário
 
-## 1. O que o sistema faz
+- [Perfis de acesso](#perfis-de-acesso)
+- [Recursos](#recursos)
+- [Tecnologias](#tecnologias)
+- [Estrutura do projeto](#estrutura-do-projeto)
+- [Pré-requisitos](#pré-requisitos)
+- [Execução local](#execução-local)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Deploy na Vercel](#deploy-na-vercel)
+- [Problemas comuns](#problemas-comuns)
 
-- **Visitantes**: navegam pelo catálogo e na página inicial.
-- **Leitores** (criam conta sozinhos): fazem login, pegam livros emprestados
-  (gera QR Code) e veem/devolvem seus empréstimos.
-- **Bibliotecários**: tudo do leitor + cadastram/editam/excluem livros e dão
-  **baixa** (registram a devolução) de qualquer empréstimo.
-- **Administradores**: tudo do bibliotecário + criam e excluem usuários
-  (inclusive outros admins e bibliotecários).
+## Perfis de acesso
 
-Recursos do painel administrativo:
+| Perfil          | Permissões                                                                   |
+| --------------- | ---------------------------------------------------------------------------- |
+| Visitante       | Navega pelo catálogo e pela página inicial.                                  |
+| Leitor          | Cria a própria conta, faz login, realiza empréstimos (com QR Code) e acompanha as devoluções. |
+| Bibliotecário   | Tudo do leitor, além de cadastrar, editar e excluir livros e registrar devoluções. |
+| Administrador   | Tudo do bibliotecário, além de criar e excluir usuários, incluindo outros administradores. |
 
-- **Escanear pelo celular** (Painel Admin → Escanear): lê o **código de barras
-  (ISBN)** ou o **QR** do livro pela câmera para registrar empréstimo, dar baixa
-  (devolução) ou cadastrar um livro novo. Ao cadastrar por ISBN, os dados podem
-  ser preenchidos automaticamente (via Open Library). A câmera exige **HTTPS** —
-  funciona no site publicado na Vercel (e em `localhost`), mas não em `http://`
-  por IP de rede.
-- **Etiquetas QR**: o sistema gera um QR por livro para imprimir e colar no
-  exemplar (na tela de Escanear).
-- **Upload de foto da capa**: ao cadastrar/editar um livro é possível **enviar
-  uma foto** (a imagem é reduzida no próprio navegador) ou colar uma URL.
-- **Categorias editáveis** (Painel Admin → Categorias): criar, renomear (ajusta
-  os livros automaticamente) e excluir categorias.
+## Recursos
 
-A \"baixa do livro\" (devolução) também fica em **Painel Admin → Gerenciar
-Empréstimos**, no botão **Devolver**. O cadastro de livros fica em **Painel
-Admin → Gerenciar Livros**.
+- **Leitura pela câmera** (Painel Admin → Escanear): lê o código de barras (ISBN)
+  ou o QR do livro para registrar empréstimo, devolução ou cadastro. Ao cadastrar
+  por ISBN, os dados podem ser preenchidos automaticamente via Open Library. O
+  acesso à câmera exige HTTPS, disponível no site publicado e em `localhost`, mas
+  não em endereços `http://` por IP de rede.
+- **Etiquetas QR**: geração de um QR por livro, para impressão e fixação no
+  exemplar.
+- **Upload de capa**: ao cadastrar ou editar um livro, é possível enviar uma
+  imagem — redimensionada no próprio navegador — ou informar uma URL.
+- **Categorias editáveis** (Painel Admin → Categorias): criação, renomeação (com
+  ajuste automático dos livros vinculados) e exclusão.
+- **Gestão de empréstimos** (Painel Admin → Gerenciar Empréstimos): registro de
+  devoluções e acompanhamento do acervo.
 
----
+## Tecnologias
 
-## 2. Como funciona por dentro (resumo)
+- **Next.js 16** e **React 19**.
+- **TypeScript**.
+- **Tailwind CSS 4** com componentes baseados em **Radix UI**.
+- **lucide-react** (ícones), **recharts** (gráficos dos relatórios) e
+  **sonner** (notificações).
+- **@zxing/browser** para leitura de código de barras e **qrcode.react** para
+  geração de QR.
 
-- **Next.js 16** (React 19) — telas e também as rotas de API (`app/api/...`).
-- **PostgreSQL** — banco de dados.
-- **Prisma** — a "ponte" entre o código e o banco. O arquivo
-  `prisma/schema.prisma` descreve as tabelas (`User`, `Book`, `Loan`).
-- **Autenticação** — senha guardada com hash (bcrypt) e sessão num cookie
-  seguro (JWT). Nenhuma senha é salva em texto puro.
+## Estrutura do projeto
 
 ```
-app/api/        -> as rotas do back-end (login, livros, empréstimos, usuários)
-contexts/       -> estado do front-end, que conversa com as rotas de API
-lib/prisma.ts   -> conexão com o banco
-lib/auth.ts     -> senha + sessão
-prisma/         -> o desenho do banco de dados
-scripts/        -> criação do primeiro admin
+app/          rotas e páginas (home, catálogo, empréstimos, painel admin)
+components/   componentes de UI e de domínio (modal de livro, carrossel, scanner)
+contexts/     estado da aplicação e integração com o API Gateway
+hooks/        hooks reutilizáveis
+lib/          tipos, utilitários e camada de dados
+public/       ativos estáticos
 ```
 
----
+## Pré-requisitos
 
-## 3. Pré-requisitos
+- **Node.js 20.9 ou superior** (verifique com `node -v`).
+- O **backend em execução** e acessível. Para subir os microsserviços
+  localmente, consulte o README do repositório `biblioflix-backend`.
 
-- **Node.js 20.9 ou superior** — https://nodejs.org (baixe a versão LTS).
-  Confira com: `node -v`
-- **Um banco PostgreSQL**. Escolha **uma** das opções abaixo.
-
-### Opção A (mais fácil): PostgreSQL na nuvem com Neon — grátis, sem instalar nada
-
-1. Crie uma conta em https://neon.tech
-2. Crie um projeto. Ele já cria um banco para você.
-3. Copie a **connection string** (algo como
-   `postgresql://usuario:senha@ep-xxx.neon.tech/neondb?sslmode=require`).
-   Você vai colar isso no `.env` no próximo passo.
-
-### Opção B: PostgreSQL instalado na sua máquina
-
-1. Instale o PostgreSQL: https://www.postgresql.org/download/
-2. Crie um banco chamado `biblioteca`. No terminal:
-   ```bash
-   createdb biblioteca
-   ```
-   (ou use o pgAdmin). A connection string será parecida com:
-   `postgresql://postgres:SUA_SENHA@localhost:5432/biblioteca?schema=public`
-
----
-
-## 4. Rodando o projeto (passo a passo)
-
-Abra o terminal **dentro da pasta do projeto** e siga na ordem.
-
-### Passo 1 — Instalar as dependências
+## Execução local
 
 ```bash
 npm install
-```
-
-> Isso também cria um `package-lock.json` e gera o cliente do Prisma
-> automaticamente (graças ao script `postinstall`).
-
-### Passo 2 — Criar o arquivo de configuração `.env`
-
-Copie o exemplo e edite:
-
-```bash
-cp .env.example .env
-```
-
-Abra o `.env` e preencha:
-
-- `DATABASE_URL` → a connection string do Passo 3 (Neon ou local).
-- `AUTH_SECRET` → um valor aleatório longo. Gere um assim:
-
-  ```bash
-  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-  ```
-
-  Cole o resultado entre as aspas do `AUTH_SECRET`.
-
-### Passo 3 — Criar as tabelas no banco
-
-```bash
-npm run db:push
-```
-
-Isso lê o `prisma/schema.prisma` e cria as tabelas no seu PostgreSQL. O banco
-fica **vazio** (sem nenhum livro ou usuário) — exatamente como você pediu.
-
-> Alternativa para quem quer histórico de migrações versionado no git:
-> `npm run db:migrate` (vai pedir um nome, digite por exemplo `init`).
-
-### Passo 4 — Criar o primeiro administrador
-
-```bash
-npm run create-admin
-```
-
-Ele vai perguntar **nome**, **email** e **senha**. Esse será seu login de admin.
-(Pode rodar de novo depois para criar/promover outros admins.)
-
-### Passo 5 — Rodar o site
-
-```bash
+cp .env.example .env.local     # defina NEXT_PUBLIC_API_URL
 npm run dev
 ```
 
-Abra **http://localhost:3000**. Clique em **Entrar**, use o email e senha do
-admin que você criou. Pronto: agora você pode cadastrar livros e gerenciar tudo.
+A aplicação fica disponível em `http://localhost:3000`.
 
-### Bônus — Ver e editar o banco visualmente
+Com o backend rodando via Docker Compose, o gateway responde em
+`http://localhost:8080` — valor já sugerido no `.env.example`. Faça login com as
+credenciais de administrador definidas no seed do backend.
 
-```bash
-npm run db:studio
-```
+Scripts disponíveis:
 
-Abre o **Prisma Studio** no navegador, uma planilha visual das suas tabelas.
+| Script          | Descrição                          |
+| --------------- | ---------------------------------- |
+| `npm run dev`   | Servidor de desenvolvimento.       |
+| `npm run build` | Build de produção.                 |
+| `npm run start` | Serve o build de produção.         |
+| `npm run lint`  | Análise estática com ESLint.       |
 
----
+## Variáveis de ambiente
 
-## 5. Como usar o sistema
+| Variável              | Descrição                                                              |
+| --------------------- | ---------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL` | URL pública do API Gateway. Local: `http://localhost:8080`. Em produção, a URL do gateway publicado. |
 
-- **Cadastrar um livro**: Painel Admin → Gerenciar Livros → *Adicionar Livro*.
-  Preencha título, autor, gênero, ISBN, capa (URL de uma imagem), nº de cópias
-  etc.
-- **Criar usuários** (leitor, bibliotecário, admin): Painel Admin →
-  Gerenciar Usuários → *Adicionar Usuário*. Defina nome, email, senha e função.
-- **Leitor pegar um livro**: na home ou no catálogo, clique no livro →
-  *Realizar Empréstimo*. Aparece o QR Code do empréstimo.
-- **Dar baixa (devolução)**: Painel Admin → Gerenciar Empréstimos → botão
-  *Devolver*. A cópia volta ao acervo automaticamente.
+Por ser `NEXT_PUBLIC_*`, essa variável é embutida no bundle do cliente e não deve
+conter segredos.
 
----
+## Deploy na Vercel
 
-## 6. Subir o projeto no GitHub
+1. Importe o repositório do GitHub na Vercel.
+2. Em **Settings → Environment Variables**, defina `NEXT_PUBLIC_API_URL` com a
+   URL do gateway em produção.
+3. Faça o deploy. A cada alteração dessa variável, refaça o deploy para que o
+   novo valor seja incorporado ao bundle.
 
-> ⚠️ **Nunca suba o arquivo `.env`** (ele tem segredos). O `.gitignore` já está
-> configurado para ignorá-lo — não o remova de lá.
+No gateway, lembre-se de incluir a URL da Vercel em `FRONTEND_ORIGIN` para
+liberar o CORS.
 
-1. Crie um repositório **vazio** no GitHub (sem README), e copie a URL dele.
-2. No terminal, dentro da pasta do projeto:
+## Problemas comuns
 
-   ```bash
-   git init
-   git add .
-   git commit -m "Biblioteca com PostgreSQL, login e painel admin"
-   git branch -M main
-   git remote add origin https://github.com/SEU_USUARIO/SEU_REPOSITORIO.git
-   git push -u origin main
-   ```
-
-3. Confira no GitHub que o `.env` **não** apareceu na lista de arquivos. Deve
-   aparecer apenas o `.env.example`.
-
----
-
-## 7. (Opcional) Publicar online na Vercel
-
-1. Em https://vercel.com, importe o repositório do GitHub.
-2. Em **Settings → Environment Variables**, adicione:
-   - `DATABASE_URL` (use um banco na nuvem, como o Neon do Passo 3 — bancos
-     `localhost` não funcionam na nuvem).
-   - `AUTH_SECRET` (o mesmo valor aleatório, ou gere outro).
-3. Em **Settings → Build & Development**, defina o *Build Command* como:
-   ```
-   prisma db push && next build
-   ```
-   (isso garante que as tabelas existam no banco de produção antes do build).
-4. Faça o deploy. Depois, rode `npm run create-admin` apontando o `.env` para o
-   banco de produção (ou crie o admin localmente conectado a esse mesmo banco).
-
----
-
-## 8. Problemas comuns
-
-- **"AUTH_SECRET não definido"** → você esqueceu de preencher o `.env`
-  (ou de copiá-lo a partir do `.env.example`).
-- **Erro de conexão com o banco** → confira a `DATABASE_URL`. No Neon, ela
-  precisa terminar com `?sslmode=require`.
-- **`node --env-file` não reconhecido** → sua versão do Node é antiga.
-  Atualize para Node 20.9+.
-- **Não aparece nenhum livro** → é esperado! O banco começa vazio. Faça login
-  como admin e cadastre os primeiros livros.
-- **Esqueci a senha do admin** → rode `npm run create-admin` de novo com o mesmo
-  email; ele atualiza a senha.
-
-Bom proveito! 📚
+- **Nenhum dado carrega ou erros de rede no console.** Verifique se o backend
+  está no ar e se `NEXT_PUBLIC_API_URL` aponta para o gateway correto.
+- **A câmera não abre na tela Escanear.** O navegador só libera a câmera em HTTPS
+  ou em `localhost`. Acessos por IP de rede em `http://` são bloqueados.
+- **Bloqueio de CORS.** Confirme que `FRONTEND_ORIGIN`, no gateway, corresponde
+  exatamente à origem em que o frontend está sendo servido.
+- **Alteração de variável não surtiu efeito em produção.** Variáveis
+  `NEXT_PUBLIC_*` são fixadas no build; é necessário refazer o deploy.

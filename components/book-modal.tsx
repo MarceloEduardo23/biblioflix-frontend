@@ -84,7 +84,7 @@ export function BookModal({ book, open, onClose }: BookModalProps) {
               type="button"
               onClick={() => setZoomed(true)}
               aria-label={`Ampliar capa de ${book.title}`}
-              className="group relative w-36 mx-auto md:mx-0 md:w-48 aspect-[2/3] flex-shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border cursor-zoom-in"
+              className="group relative w-36 mx-auto md:mx-0 md:w-48 aspect-[2/3] flex-shrink-0 self-start md:sticky md:top-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border cursor-zoom-in"
             >
               <Image
                 src={book.cover}
