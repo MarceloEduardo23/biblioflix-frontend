@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User, Book, Category, Slide, LoanWithDetails } from "@/lib/types";
+import { useWarmup } from "@/hooks/use-warmup";
 
 // ---------------------------------------------------------------------------
 // Funções utilitárias para converter o JSON da API (datas vêm como string)
@@ -229,6 +230,9 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     },
     [loadLoans, loadUsers]
   );
+
+  // Acorda os serviços do Render assim que o frontend é carregado (plano gratuito hiberna).
+  useWarmup();
 
   // Bootstrap inicial: descobre quem está logado e carrega o catálogo.
   useEffect(() => {
