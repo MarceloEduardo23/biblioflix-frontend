@@ -37,7 +37,9 @@ function reviveLoan(raw: any): LoanWithDetails {
 
 async function api(path: string, options?: RequestInit) {
   // Base do API Gateway (único ponto de entrada do backend de microsserviços).
-  const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  // As chamadas vão para /gw/* (mesmo domínio do site) e o Next repassa para o
+  // gateway — ver o rewrite em next.config.mjs. Sem CORS, um único túnel basta.
+  const BASE = "/gw";
 
   // Traduz os caminhos antigos (/api/*) para as rotas do gateway, mantendo as
   // ~20 chamadas existentes intactas:
@@ -61,6 +63,8 @@ async function api(path: string, options?: RequestInit) {
   const res = await fetch(`${BASE}${p}`, {
     headers: {
       "Content-Type": "application/json",
+      // Pula a página de aviso do ngrok (inofensivo fora do ngrok).
+      "ngrok-skip-browser-warning": "true",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...options,

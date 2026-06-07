@@ -36,7 +36,7 @@ type ServiceHealth = {
   error: string | null;
 };
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE = "/gw";
 
 export default function AdminMicroservicosPage() {
   const { currentUser, loading } = useLibrary();
@@ -60,7 +60,10 @@ export default function AdminMicroservicosPage() {
           ? window.localStorage.getItem("biblioflix_token")
           : null;
       const res = await fetch(`${BASE}/health/services`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
       if (!res.ok) throw new Error(`Gateway respondeu HTTP ${res.status}`);
       const data = await res.json();

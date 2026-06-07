@@ -107,10 +107,13 @@ export default function AdminRelatoriosPage() {
     setFetching(true);
     setError(null);
     try {
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const BASE = "/gw";
       const token = typeof window !== "undefined" ? window.localStorage.getItem("biblioflix_token") : null;
       const res = await fetch(`${BASE}/reports`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: {
+          "ngrok-skip-browser-warning": "true",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Erro ao carregar relatório.");
@@ -127,7 +130,7 @@ export default function AdminRelatoriosPage() {
     } catch (err) {
       setError(
         err instanceof Error
-          ? `${err.message} (o backend/gateway está no ar em ${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}?)`
+          ? `${err.message} (o backend está no ar? rode "docker compose up -d" na pasta do backend)`
           : "Erro ao carregar relatório."
       );
     } finally {
