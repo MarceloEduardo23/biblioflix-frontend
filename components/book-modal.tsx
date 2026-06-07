@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Clock, BookOpen } from "lucide-react";
+import { Clock, BookOpen, Maximize2, X } from "lucide-react";
 import type { Book, LoanWithDetails } from "@/lib/types";
 import { useLibrary } from "@/contexts/library-context";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ReservationCountdown } from "@/components/reservation-countdown";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface BookModalProps {
   book: Book | null;
@@ -25,6 +26,16 @@ export function BookModal({ book, open, onClose }: BookModalProps) {
   const { currentUser, createLoan, loans, suspendedUntil } = useLibrary();
   const [loanCreated, setLoanCreated] = useState<LoanWithDetails | null>(null);
   const [loading, setLoading] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+
+  // Sempre que o modal fechar (ou trocar de livro), garante que o zoom volta ao estado inicial.
+  useEffect(() => {
+    if (!open) setZoomed(false);
+  }, [open]);
+
+  useEffect(() => {
+    setZoomed(false);
+  }, [book?.id]);
 
   if (!book) return null;
 
@@ -39,6 +50,7 @@ export function BookModal({ book, open, onClose }: BookModalProps) {
 
   const handleClose = () => {
     setLoanCreated(null);
+    setZoomed(false);
     onClose();
   };
 
@@ -65,15 +77,30 @@ export function BookModal({ book, open, onClose }: BookModalProps) {
           <LoanConfirmation loan={loanCreated} onClose={handleClose} />
         ) : (
           <div className="flex flex-col md:flex-row gap-6">
-            <div className="relative w-36 mx-auto md:mx-0 md:w-48 aspect-[2/3] flex-shrink-0 rounded-lg overflow-hidden">
+            {/* Capa: object-contain para mostrar a capa inteira (sem cortes),
+                fundo neutro para diagramar imagens fora da proporção 2:3,
+                e clique para ampliar. */}
+            <button
+              type="button"
+              onClick={() => setZoomed(true)}
+              aria-label={`Ampliar capa de ${book.title}`}
+              className="group relative w-36 mx-auto md:mx-0 md:w-48 aspect-[2/3] flex-shrink-0 rounded-lg overflow-hidden bg-muted ring-1 ring-border cursor-zoom-in"
+            >
               <Image
                 src={book.cover}
-                alt={book.title}
+                alt={`Capa de ${book.title}`}
                 fill
-                className="object-cover"
+                className="object-contain"
                 sizes="(max-width: 768px) 144px, 192px"
+                quality={90}
               />
-            </div>
+              {/* Indicador de "ampliar" no hover */}
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
+                <span className="rounded-full bg-black/60 p-2 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                  <Maximize2 className="h-5 w-5" />
+                </span>
+              </span>
+            </button>
 
             <div className="flex-1 space-y-4">
               <div>
@@ -143,7 +170,81 @@ export function BookModal({ book, open, onClose }: BookModalProps) {
           </div>
         )}
       </DialogContent>
+
+      {/* Visualização ampliada da capa (lightbox). Renderizada via portal no
+          document.body para escapar do transform do DialogContent — caso
+          contrário um position:fixed ficaria posicionado errado. */}
+      <CoverLightbox
+        open={zoomed}
+        src={book.cover}
+        alt={`Capa de ${book.title}`}
+        onClose={() => setZoomed(false)}
+      />
     </Dialog>
+  );
+}
+
+function CoverLightbox({
+  open,
+  src,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  // Fecha com a tecla Esc — em fase de captura, para fechar apenas o lightbox
+  // sem disparar o fechamento do Dialog que está por baixo.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onClose]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 md:p-10"
+      role="dialog"
+      aria-modal="true"
+      aria-label={alt}
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Fechar visualização"
+        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
+      >
+        <X className="h-6 w-6" />
+      </button>
+
+      <div
+        className="relative h-full w-full max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          className="object-contain"
+          sizes="90vw"
+          quality={100}
+          priority
+        />
+      </div>
+    </div>,
+    document.body
   );
 }
 
